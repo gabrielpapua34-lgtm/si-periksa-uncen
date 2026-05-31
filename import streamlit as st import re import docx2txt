@@ -1,12 +1,13 @@
 import streamlit as st
 import re
+import docx2txt
 
 # Pengaturan Halaman Utama Web
 st.set_page_config(page_title="SI-PERIKSA Ilmu Pemerintahan Uncen", layout="wide", page_icon="🏛️")
 
 st.title("🏛️ SI-PERIKSA - Ilmu Pemerintahan FISIP Uncen")
 st.subheader("Generator & Pemeriksa Skripsi Mahasiswa Otomatis")
-st.caption("Alat bantu dosen untuk menilai kesesuaian draf skripsi secara real dan objektif.")
+st.caption("Alat bantu dosen untuk menilai kesesuaian draf skripsi secara real, objektif, dan otomatis.")
 st.divider()
 
 # SIDEBAR: Input Data dan Unggah File
@@ -18,27 +19,38 @@ with st.sidebar:
     st.header("⚙️ Metode & File")
     pendekatan = st.radio("Pilih Pendekatan Skripsi:", ["Kualitatif", "Kuantitatif"])
     
-    # Input teks manual untuk kemudahan penggunaan langsung (Bisa copas dari Word)
-    st.subheader("📝 Salin Teks Skripsi")
-    skripsi_text = st.text_area("Tempel isi Bab I & Bab Lainnya di sini:", height=300, 
-                                placeholder="Salin isi dokumen skripsi mahasiswa dari Microsoft Word lalu tempel di sini...")
+    st.subheader("📄 Unggah Dokumen Skripsi")
+    # FITUR BARU: Unggah file Microsoft Word (.docx)
+    uploaded_file = st.file_uploader("Pilih file skripsi mahasiswa (.docx)", type=["docx"])
+    
+    st.caption("Atau Anda tetap bisa menyalin teks secara manual di bawah ini jika diperlukan:")
+    manual_text = st.text_area("Tempel teks di sini (Opsional jika tidak unggah file):", height=150)
+
+# PROSES EKSTRAKSI TEKS DARI FILE ATAU MANUAL
+skripsi_text = ""
+if uploaded_file is not None:
+    # Membaca teks dari file .docx secara otomatis
+    skripsi_text = docx2txt.process(uploaded_file)
+elif manual_text:
+    skripsi_text = manual_text
 
 # LOGIKA PEMERIKSAAN OTOMATIS
 if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
-    if not nama_mahasiswa or not skripsi_text:
-        st.error("❌ Mohon isi Nama Mahasiswa dan Tempel Teks Skripsi terlebih dahulu!")
+    if not nama_mahasiswa:
+        st.error("❌ Mohon isi Nama Mahasiswa terlebih dahulu!")
+    elif not skripsi_text:
+        st.error("❌ Mohon unggah file .docx skripsi atau tempel teks skripsi mahasiswa!")
     else:
         # Menampilkan Data Mahasiswa yang Diperiksa
         st.success(f"📋 Hasil Analisis Skripsi: {nama_mahasiswa} ({nim_mahasiswa}) | Pendekatan: **{pendekatan}**")
         
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns()
         
         # ------------------- PENDEKATAN KUANTITATIF -------------------
         if pendekatan == "Kuantitatif":
             with col1:
                 st.subheader("🔍 Pengecekan Struktur Baku Kuantitatif")
                 
-                # Komponen wajib kuantitaf
                 komponen_kuanti = {
                     "A. Judul": ["judul"],
                     "B. Latar Belakang Masalah": ["latar belakang", "latarbelakang"],
@@ -57,7 +69,6 @@ if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
                 total_komponen = len(komponen_kuanti)
                 
                 for komp, keywords in komponen_kuanti.items():
-                    # Cek keberadaan struktur menggunakan regex sederhana
                     found = any(re.search(kw, skripsi_text.lower()) for kw in keywords)
                     if found:
                         st.write(f"✅ **{komp}** -> <span style='color:green'>Terdeteksi</span>", unsafe_allow_html=True)
@@ -86,28 +97,28 @@ if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
                 
                 # 1. Deteksi Judul
                 st.markdown("**A. Aspek Judul**")
-                kata_judul = len(re.findall(r'\w+', skripsi_text[:200])) # Estimasi panjang judul di paragraf awal
+                kata_judul = len(re.findall(r'\w+', skripsi_text[:200]))
                 if kata_judul > 25:
-                    st.error("⚠️ Judul terdeteksi terlalu panjang. Amandemen rekomendasi: Maksimal 20-25 kata.")
+                    st.error(f"⚠️ Judul terdeteksi terlalu panjang ({kata_judul} kata). Rekomendasi prodi: Maksimal 20-25 kata.")
                 else:
-                    st.info("🔹 Judul sudah cukup spesifik dan tidak terlalu umum.")
+                    st.info(f"🔹 Panjang judul ideal ({kata_judul} kata) dan cukup spesifik.")
                 
                 # 2. Deteksi Urgensi di Latar Belakang
                 st.markdown("**B. Aspek Latar Belakang (Empiris)**")
-                kata_kunci_data = ["wawancara", "dokumen", "data", "fakta", "peristiwa", "kesenjangan", "tabel"]
+                kata_kunci_data = ["wawancara", "dokumen", "data", "fakta", "peristiwa", "kesenjangan", "tabel", "observasi"]
                 data_found = [kw for kw in kata_kunci_data if kw in skripsi_text.lower()]
                 
                 if len(data_found) >= 3:
                     st.info(f"🔹 Latar belakang baik. Mengandung indikator empiris: {', '.join(data_found)}")
                 else:
-                    st.error("⚠️ Latar belakang lemah unsur empiris! Mahasiswa perlu menambah fakta wawancara awal atau dokumen sekunder.")
+                    st.error("⚠️ Latar belakang lemah unsur empiris! Mahasiswa perlu menambah fakta wawancara awal atau data dokumen sekunder.")
                 
                 # 3. Deteksi Rumusan Masalah
                 st.markdown("**C. Aspek Rumusan Masalah**")
                 if "?" in skripsi_text:
                     st.info("🔹 Ditemukan kalimat tanya untuk arah pengumpulan data.")
                 else:
-                    st.error("⚠️ Teks tidak mendeteksi tanda tanya (?) pada rumusan masalah.")
+                    st.error("⚠️ Teks tidak mendeteksi tanda tanya (?) pada rumusan masalah kualitatif.")
 
                 # 4. Deteksi Manfaat
                 st.markdown("**D & E. Tujuan dan Manfaat**")
@@ -126,14 +137,14 @@ if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
                 if "buku" in skripsi_text.lower() or "pustaka" in skripsi_text.lower(): literatur.append("Buku Teks")
                 
                 if literatur:
-                    st.info(f"🔹 Sumber referensi terdeteksi: {', '.join(literatur)}")
+                    st.info(f"🔹 Sumber referensi akademik terdeteksi: {', '.join(literatur)}")
                 else:
-                    st.error("⚠️ Referensi akademik belum konsisten terdeteksi.")
+                    st.error("⚠️ Referensi akademik (Buku/Jurnal) belum konsisten terdeteksi.")
                 
                 # 6. Metode Penelitian Kualitatif
                 st.markdown("**G. Substansi Metode Penelitian**")
-                metode_kualit = ["deskriptif", "eksploratif", "eksplanatif", "evaluatif", "studi kasus", "wawancara mendalam", "informan", "triangulasi"]
-                metode_found = [m for m in metode_kualit if m in skripsi_text.lower()]
+                metode_kualit = ["deskriptif", "eksploratif", "eksplanatif", "evaluatif", "studi kasus", "wawancara mendalam", "informan", "triangulasi", "informan"]
+                metode_found = list(set([m for m in metode_kualit if m in skripsi_text.lower()]))
                 
                 st.write(f"Parameter Terpenuhi: {len(metode_found)} dari {len(metode_kualit)}")
                 for m in metode_found:
@@ -141,6 +152,7 @@ if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
                 
                 st.divider()
                 st.subheader("📝 Kesimpulan Penilaian Dosen")
-                catatan_dosen = st.text_area("Tambahkan Catatan Manual Dosen:", value="Draft secara umum sudah mengikuti format, harap perbaiki bagian yang ditandai merah oleh sistem.")
+                catatan_dosen = st.text_area("Tambahkan Catatan Manual Dosen:", value="Draft secara umum sudah mengikuti format, harap perbaiki bagian bimbingan yang ditandai merah oleh sistem.")
                 
-                st.button("💾 Cetak Lembar Rekomendasi Revisi")
+                st.button("💾 Simpan Rekomendasi Revisi")
+
