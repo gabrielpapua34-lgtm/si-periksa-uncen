@@ -1,0 +1,146 @@
+import streamlit as st
+import re
+
+# Pengaturan Halaman Utama Web
+st.set_page_config(page_title="SI-PERIKSA Ilmu Pemerintahan Uncen", layout="wide", page_icon="🏛️")
+
+st.title("🏛️ SI-PERIKSA - Ilmu Pemerintahan FISIP Uncen")
+st.subheader("Generator & Pemeriksa Skripsi Mahasiswa Otomatis")
+st.caption("Alat bantu dosen untuk menilai kesesuaian draf skripsi secara real dan objektif.")
+st.divider()
+
+# SIDEBAR: Input Data dan Unggah File
+with st.sidebar:
+    st.header("📂 Data Pemeriksaan")
+    nama_mahasiswa = st.text_input("Nama Mahasiswa", placeholder="Contoh: Yohanes Kogoya")
+    nim_mahasiswa = st.text_input("NIM", placeholder="Contoh: 202301101...")
+    
+    st.header("⚙️ Metode & File")
+    pendekatan = st.radio("Pilih Pendekatan Skripsi:", ["Kualitatif", "Kuantitatif"])
+    
+    # Input teks manual untuk kemudahan penggunaan langsung (Bisa copas dari Word)
+    st.subheader("📝 Salin Teks Skripsi")
+    skripsi_text = st.text_area("Tempel isi Bab I & Bab Lainnya di sini:", height=300, 
+                                placeholder="Salin isi dokumen skripsi mahasiswa dari Microsoft Word lalu tempel di sini...")
+
+# LOGIKA PEMERIKSAAN OTOMATIS
+if st.sidebar.button("🚀 Mulai Periksa Skripsi", type="primary"):
+    if not nama_mahasiswa or not skripsi_text:
+        st.error("❌ Mohon isi Nama Mahasiswa dan Tempel Teks Skripsi terlebih dahulu!")
+    else:
+        # Menampilkan Data Mahasiswa yang Diperiksa
+        st.success(f"📋 Hasil Analisis Skripsi: {nama_mahasiswa} ({nim_mahasiswa}) | Pendekatan: **{pendekatan}**")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        # ------------------- PENDEKATAN KUANTITATIF -------------------
+        if pendekatan == "Kuantitatif":
+            with col1:
+                st.subheader("🔍 Pengecekan Struktur Baku Kuantitatif")
+                
+                # Komponen wajib kuantitaf
+                komponen_kuanti = {
+                    "A. Judul": ["judul"],
+                    "B. Latar Belakang Masalah": ["latar belakang", "latarbelakang"],
+                    "C. Rumusan Masalah": ["rumusan masalah", "perumusan masalah"],
+                    "D. Tujuan dan Manfaat Penelitian": ["tujuan", "manfaat"],
+                    "E. Tinjauan Pustaka": ["tinjauan pustaka", "kajian pustaka"],
+                    "F. Kerangka Konsep": ["kerangka konsep", "kerangka konseptual"],
+                    "G. Definisi Operasional": ["definisi operasional"],
+                    "H. Hipotesis": ["hipotesis"],
+                    "I. Metode Penelitian": ["metode penelitian", "metodologi"],
+                    "J. Kuisioner": ["kuisioner", "kuesioner", "angket"],
+                    "K. Daftar Pustaka": ["daftar pustaka", "referensi"]
+                }
+                
+                skor_kuanti = 0
+                total_komponen = len(komponen_kuanti)
+                
+                for komp, keywords in komponen_kuanti.items():
+                    # Cek keberadaan struktur menggunakan regex sederhana
+                    found = any(re.search(kw, skripsi_text.lower()) for kw in keywords)
+                    if found:
+                        st.write(f"✅ **{komp}** -> <span style='color:green'>Terdeteksi</span>", unsafe_allow_html=True)
+                        skor_kuanti += 1
+                    else:
+                        st.write(f"❌ **{komp}** -> <span style='color:red'>TIDAK Terdeteksi / Salah Format</span>", unsafe_allow_html=True)
+                
+                persentase = int((skor_kuanti / total_komponen) * 100)
+            
+            with col2:
+                st.subheader("📊 Skor Kelayakan Format")
+                st.metric(label="Kepatuhan Struktur Kuantitatif", value=f"{persentase}%")
+                
+                if persentase == 100:
+                    st.balloons()
+                    st.success("🟢 STATUS: LAYAK (Format Lengkap, Siap Dinilai Substansinya)")
+                elif persentase >= 70:
+                    st.warning("🟡 STATUS: REVISI MINOR (Beberapa sub-bab wajib kuantitiatif belum ditemukan)")
+                else:
+                    st.error("🔴 STATUS: REVISI MAYOR / TOLAK (Format tidak sesuai standar kuantitatif prodi)")
+
+        # ------------------- PENDEKATAN KUALITATIF -------------------
+        elif pendekatan == "Kualitatif":
+            with col1:
+                st.subheader("🕵️ Analisis Substansi Kualitatif (Ketentuan Prodi)")
+                
+                # 1. Deteksi Judul
+                st.markdown("**A. Aspek Judul**")
+                kata_judul = len(re.findall(r'\w+', skripsi_text[:200])) # Estimasi panjang judul di paragraf awal
+                if kata_judul > 25:
+                    st.error("⚠️ Judul terdeteksi terlalu panjang. Amandemen rekomendasi: Maksimal 20-25 kata.")
+                else:
+                    st.info("🔹 Judul sudah cukup spesifik dan tidak terlalu umum.")
+                
+                # 2. Deteksi Urgensi di Latar Belakang
+                st.markdown("**B. Aspek Latar Belakang (Empiris)**")
+                kata_kunci_data = ["wawancara", "dokumen", "data", "fakta", "peristiwa", "kesenjangan", "tabel"]
+                data_found = [kw for kw in kata_kunci_data if kw in skripsi_text.lower()]
+                
+                if len(data_found) >= 3:
+                    st.info(f"🔹 Latar belakang baik. Mengandung indikator empiris: {', '.join(data_found)}")
+                else:
+                    st.error("⚠️ Latar belakang lemah unsur empiris! Mahasiswa perlu menambah fakta wawancara awal atau dokumen sekunder.")
+                
+                # 3. Deteksi Rumusan Masalah
+                st.markdown("**C. Aspek Rumusan Masalah**")
+                if "?" in skripsi_text:
+                    st.info("🔹 Ditemukan kalimat tanya untuk arah pengumpulan data.")
+                else:
+                    st.error("⚠️ Teks tidak mendeteksi tanda tanya (?) pada rumusan masalah.")
+
+                # 4. Deteksi Manfaat
+                st.markdown("**D & E. Tujuan dan Manfaat**")
+                if "teoritis" in skripsi_text.lower() and "praktis" in skripsi_text.lower():
+                    st.info("🔹 Manfaat Teoritis (Keilmuan) & Manfaat Praktis (Kebijakan) sudah lengkap.")
+                else:
+                    st.error("⚠️ Belum memisahkan Manfaat Teoritis dan Manfaat Praktis secara tegas.")
+
+            with col2:
+                st.subheader("🔬 Analisis Teori & Metode (Kualitatif)")
+                
+                # 5. Kajian Teori
+                st.markdown("**F. Validasi Kajian Teori (Sumber Literatur)**")
+                literatur = []
+                if "jurnal" in skripsi_text.lower(): literatur.append("Artikel Jurnal")
+                if "buku" in skripsi_text.lower() or "pustaka" in skripsi_text.lower(): literatur.append("Buku Teks")
+                
+                if literatur:
+                    st.info(f"🔹 Sumber referensi terdeteksi: {', '.join(literatur)}")
+                else:
+                    st.error("⚠️ Referensi akademik belum konsisten terdeteksi.")
+                
+                # 6. Metode Penelitian Kualitatif
+                st.markdown("**G. Substansi Metode Penelitian**")
+                metode_kualit = ["deskriptif", "eksploratif", "eksplanatif", "evaluatif", "studi kasus", "wawancara mendalam", "informan", "triangulasi"]
+                metode_found = [m for m in metode_kualit if m in skripsi_text.lower()]
+                
+                st.write(f"Parameter Terpenuhi: {len(metode_found)} dari {len(metode_kualit)}")
+                for m in metode_found:
+                    st.write(f"✔️ Parameter Terdeteksi: *{m.capitalize()}*")
+                
+                st.divider()
+                st.subheader("📝 Kesimpulan Penilaian Dosen")
+                catatan_dosen = st.text_area("Tambahkan Catatan Manual Dosen:", value="Draft secara umum sudah mengikuti format, harap perbaiki bagian yang ditandai merah oleh sistem.")
+                
+                st.button("💾 Cetak Lembar Rekomendasi Revisi")
