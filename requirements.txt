@@ -1,1 +1,1 @@
-textstreamlit
+treamlit==1.35.0
